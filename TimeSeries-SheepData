@@ -1,0 +1,50 @@
+##i.	Shepherds needs help in forecasting the population of the sheep. It takes shepherds a couple of weeks to build 
+##more corrals and they also need to know when they would need to supplement their income when there is a downturn on the population of the sheep. 
+
+#Reading Sheep data for data without seasonality
+sheep <- read.csv('/Users/hannina/Documents/Exam 2/annual-sheep-population-1000s-in.csv', header = TRUE, sep=',')
+sheepTS <- ts(sheep, frequency = 1, start = 1867)
+
+plot.ts(sheepTS[-74,2])
+
+sheep_TS <- sheepTS[-74, ]
+sheepforecasts <- HoltWinters(sheep_TS[,2], beta=FALSE, gamma=FALSE)
+sheepforecasts
+
+sheepforecasts$fitted
+
+#plotting sheep data forecast
+plot(sheepforecasts)
+sheepforecasts$SSE
+
+#install.packages("forecast")
+library(forecast)
+
+fit <- forecast(sheepforecasts)
+plot(fit)
+
+#ACF and KPSS test for sheep data
+acf(sheep_TS[,2], lag.max=20)
+
+#kpss.test(sheep_TS[,2])
+#Differencing 
+
+x <- cumsum(sheep_TS[,2])
+diff(x, lag = 2)
+
+df1 <- diff(x, differences = 2)
+
+#Plotting differenced data
+ts.plot(df1)
+
+#plotting ACF of differenced data
+acf(df1, lag.max=20)
+
+#install.packages('aTSA')
+library(aTSA)
+
+#install.packages('aTSA')
+library(aTSA)
+
+k <- kpss.test(df1)
+
