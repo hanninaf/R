@@ -1,0 +1,281 @@
+TREE MODEL 
+1. Build tree model on train data and prune it using best tree size to classify V58 (spam or non-spam) type using V1 through V57. What is best tree size?
+train <- read.csv(file="/Users/hannina/Documents/ALGO II/Final Exam/train.csv", header=TRUE, sep=",")
+library(tree)
+library(MASS)
+library(boot)
+spam <- ifelse(train$V58=="email","non-spam","spam")
+train.spam <- data.frame(train,spam)
+tree.spam <- tree(spam~.-V58,data=train.spam)
+plot(tree.spam)
+text(tree.spam,pretty=0)
+ 
+set.seed(123)
+cv.spam <- cv.tree(tree.spam,FUN=prune.misclass)
+cv.spam
+## $size
+##  [1] 13 12  9  8  7  6  5  3  2  1
+## 
+## $dev
+##  [1]  299  302  321  320  323  355  493  495  690 1267
+## 
+## $k
+##  [1]       -Inf   0.000000   7.666667   8.000000  14.000000  25.000000
+##  [7]  51.000000  51.500000 175.000000 607.000000
+## 
+## $method
+## [1] "misclass"
+## 
+## attr(,"class")
+## [1] "prune"         "tree.sequence"
+#Optimal tree size using cv is 13 
+par(mfrow=c(1,2))
+plot(cv.spam$size,cv.spam$dev,type="b")
+plot(cv.spam$k,cv.spam$dev,type="b")
+ 
+prune.spam <- prune.misclass(tree.spam,best=13)
+par(mfrow=c(1,1))
+plot(prune.spam)
+text(prune.spam,pretty=0)
+ 
+2.	What words or symbols are used in building the optimal trees? (See spambase.names.txt) 
+#Length of longest uninterrupted sequence of capital letters, average length of uninterrupted sequences of capital letters, and frequency of the words our, hp, free, george, and edu.
+3.	Apply the model to the test data and get the confusion matrix and error rates for each class and overall classes.
+test <- read.csv(file="/Users/hannina/Documents/ALGO II/Final Exam/test.csv", header=TRUE, sep=",")
+pred=predict(prune.spam,test, type="class")
+spamtest <- ifelse(test$V58=="email","non-spam","spam")
+test.spam <- data.frame(test,spamtest)
+test.spam2 <- data.frame(test.spam[,-58])
+obs=test.spam2[,"spamtest"]
+#Confusion Matrix
+conf=table(pred,obs);conf
+##           obs
+## pred       non-spam spam
+##   non-spam      781   64
+##   spam           54  482
+#Error Rate for overall classes = 0.08544533 (8.54%)
+1-sum(diag(conf))/sum(conf)
+## [1] 0.08544533
+#Error Rate for Spam = 0.1172161 (11.72%)
+sum(conf[-2,-1])/sum(conf[,-1])
+## [1] 0.1172161
+#Error Rate for Non-spam = 0.06467066 (6.46%)
+sum(conf[-1,-2])/sum(conf[,-2])
+## [1] 0.06467066
+RANDOM FOREST 
+4. Using the train data, build a bagging model and get OOB error rate and apply it to the test data and get error rate. Use ntree = 1000.
+library(randomForest)
+## randomForest 4.6-12
+## Type rfNews() to see new features/changes/bug fixes.
+train.spam <- data.frame(train,spam)
+train.spam2 <- data.frame(train.spam[,-58])
+set.seed(123)
+spam.bag = randomForest(spam~., data=train.spam2, ntree=1000, importance=TRUE)
+spam.bag
+## 
+## Call:
+##  randomForest(formula = spam ~ ., data = train.spam2, ntree = 1000,      importance = TRUE) 
+##                Type of random forest: classification
+##                      Number of trees: 1000
+## No. of variables tried at each split: 7
+## 
+##         OOB estimate of  error rate: 4.94%
+## Confusion matrix:
+##          non-spam spam class.error
+## non-spam     1897   56  0.02867384
+## spam          103 1164  0.08129440
+#OBB Error rate: 0.0493788 (4.93%)
+spam.bag$err.rate[1000,1]
+##        OOB 
+## 0.04937888
+#Applying to test data
+yhat = predict(spam.bag, test.spam2)
+y = test.spam2$spamtest
+table(y,yhat)
+##           yhat
+## y          non-spam spam
+##   non-spam      806   29
+##   spam           32  514
+#Error Rate of test date = 0.04417089 (4.41%)
+mean(y != yhat)
+## [1] 0.04417089
+5.	Using the train data, build a randomForest Model using the best mtry and get OOB error rate. Use ntree =1000.
+m = round(sqrt(dim(train.spam2)[2]-1))
+for (i in c(1000)){ 
+  for (j in c(m-1, m, m+1)){ 
+    set.seed(123)
+    rf.spam=randomForest(spam ~., data=train.spam2,  mtry=j, ntree=i)
+    # oob error rate for training data
+    yhat1=rf.spam$predicted
+    y1=train.spam2$spam
+    error_rate <- mean(y1 != yhat1)
+    if (exists('oob_err')==FALSE){
+      oob_err = c(i,j,error_rate) 
+    }
+    else{
+      oob_err = rbind(oob_err, c(i,j,error_rate)) 
+    }
+  }
+}
+oob_err <- as.data.frame(oob_err) 
+names(oob_err) <- c('ntree', 'mtry', 'oob_error_rate') 
+oob_err$mtry <- as.factor(oob_err$mtry) 
+#Best mtry is 9
+min.mtry <- as.numeric(levels(oob_err$mtry[which.min(oob_err$oob_error_rate)])[oob_err$mtry[which.min(oob_err$oob_error_rate)]])
+min.mtry
+## [1] 9
+#OOB error = 0.04906832 (4.90%)
+min(oob_err$oob_error_rate)
+## [1] 0.04906832
+6.	Find 20 most important variables used in this randomForest. What are they in words or symbols? (See spambase.names.txt)
+set.seed(123)
+rf.spam2=randomForest(spam~., data=train.spam2, mtry=9, ntree=1000, proximity=TRUE, importance=TRUE, oob.prox=FALSE)
+varImpPlot(rf.spam2, sort=TRUE, n.var=20)
+ 
+best <- as.data.frame(round(importance(rf.spam2), 2))
+top = best[order(-best$MeanDecreaseGini), , drop = FALSE]
+top20 = top[1:20, , drop=FALSE]
+top20
+##     non-spam  spam MeanDecreaseAccuracy MeanDecreaseGini
+## V52    55.01 55.45                69.82           186.76
+## V53    50.37 42.86                58.25           168.74
+## V7     61.41 40.93                64.29           125.95
+## V16    49.17 40.70                55.18           113.83
+## V21    29.85 37.41                43.45            96.24
+## V55    44.69 40.74                58.00            95.09
+## V56    39.88 34.89                52.94            79.57
+## V25    37.86 52.47                55.81            69.28
+## V57    29.98 26.53                39.95            59.91
+## V24    26.16 19.41                28.99            59.64
+## V5     26.05 30.54                35.17            37.39
+## V19    18.38 25.05                29.24            35.52
+## V23    26.82 10.90                27.45            32.49
+## V27    24.22 33.32                36.86            28.13
+## V46    29.62 45.44                48.98            26.53
+## V26    16.54 26.41                28.86            23.05
+## V37    21.99 28.32                32.05            18.52
+## V50    12.51 25.27                26.15            17.88
+## V8     23.89 12.95                25.22            17.28
+## V17    22.51 13.42                23.92            16.83
+#The 20 most important variables are: V52, V53, V7, V16, V21, V55, V56, V25, V57, V24, V5, V19, V23, V27, V46, V26, V37, V50, V8 and V17. Which, by using the spambase.names.txt, is decoded as: Frequency of the symbosl "!", "$", "(:" average length of uninterrupted sequences of capital letter, length of longest uninterrupted sequence of capital letters, total number of capital letters in the e-mail, and frequency of the words remove, free, your, hp, money, george, our, you, "000", edu, hpl, "1999", people, and will. 
+7.	Find the outlying-ness score from proximity matrix and plot them. Are there any outliers?
+out=apply(rf.spam2$proximity,1,function(x) 1/(sum(x^2)-1)) #outlying-ness score
+plot(out,pch=".")
+ 
+#According to proximity matrix, there are no outliers
+8.	Apply it to the test data and get confusion matrix and error rates for each class and overall error rate.
+#Confusion Matrix
+yhat2 = predict(rf.spam2, test.spam2, type = "class")
+y2 = test.spam2$spamtest
+table(y2,yhat2)
+##           yhat2
+## y2         non-spam spam
+##   non-spam      805   30
+##   spam           35  511
+#Overall Error rate = 0.04706734 (4.70%)
+mean(y2 != yhat2)
+## [1] 0.04706734
+#Error rate for non-spam = 0.04166667 (4.16%)
+35/(805+35)
+## [1] 0.04166667
+#Error rate for spam = 0.05545287 (5.54%)
+30/(30+511)
+## [1] 0.05545287
+GAM
+9.	Based on 20 most important variables selected in RandomForest model above, build a gam model for V58 on train data.
+library(gam)
+## Loading required package: splines
+## Loading required package: foreach
+## Loaded gam 1.14-4
+V58 <- ifelse(train$V58=="email",1,0)
+train.spamcoded <- data.frame(train[,-58],V58)
+fit.gam <- gam(V58 ~ s(V52) + s(V53) + s(V7) + s(V16) + s(V55) + s(V21) + s(V56) + s(V25) + s(V24) + s(V57) + s(V5) + s(V19) + s(V23) + s(V27) + s(V46) + s(V26) + s(V37) + s(V8) + s(V50) + s(V12), family = binomial, data=train.spamcoded)
+10.	What variables have non-linear effect?
+summary(fit.gam)
+## 
+## Call: gam(formula = V58 ~ s(V52) + s(V53) + s(V7) + s(V16) + s(V55) + 
+##     s(V21) + s(V56) + s(V25) + s(V24) + s(V57) + s(V5) + s(V19) + 
+##     s(V23) + s(V27) + s(V46) + s(V26) + s(V37) + s(V8) + s(V50) + 
+##     s(V12), family = binomial, data = train.spamcoded)
+## Deviance Residuals:
+##        Min         1Q     Median         3Q        Max 
+## -3.371e+00 -9.977e-02  2.107e-08  2.864e-01  3.977e+00 
+## 
+## (Dispersion Parameter for binomial family taken to be 1)
+## 
+##     Null Deviance: 4316.594 on 3219 degrees of freedom
+## Residual Deviance: 1030.681 on 3138.999 degrees of freedom
+## AIC: 1192.683 
+## 
+## Number of Local Scoring Iterations: 30 
+## 
+## Anova for Parametric Effects
+##             Df Sum Sq Mean Sq F value    Pr(>F)    
+## s(V52)       1   40.6  40.637 16.0713 6.242e-05 ***
+## s(V53)       1   37.7  37.714 14.9152 0.0001147 ***
+## s(V7)        1   41.9  41.868 16.5582 4.834e-05 ***
+## s(V16)       1   34.3  34.289 13.5605 0.0002349 ***
+## s(V55)       1   18.6  18.610  7.3599 0.0067058 ** 
+## s(V21)       1   16.8  16.849  6.6636 0.0098850 ** 
+## s(V56)       1    1.4   1.378  0.5448 0.4604862    
+## s(V25)       1   41.5  41.549 16.4318 5.166e-05 ***
+## s(V24)       1    7.8   7.823  3.0939 0.0786855 .  
+## s(V57)       1    8.6   8.615  3.4070 0.0650127 .  
+## s(V5)        1   27.8  27.821 11.0028 0.0009201 ***
+## s(V19)       1    0.0   0.046  0.0182 0.8927142    
+## s(V23)       1   11.9  11.895  4.7043 0.0301616 *  
+## s(V27)       1    0.0   0.016  0.0064 0.9361632    
+## s(V46)       1   15.8  15.803  6.2497 0.0124721 *  
+## s(V26)       1    1.5   1.453  0.5745 0.4485361    
+## s(V37)       1    9.1   9.082  3.5916 0.0581640 .  
+## s(V8)        1   11.1  11.102  4.3905 0.0362198 *  
+## s(V50)       1    0.0   0.010  0.0038 0.9505878    
+## s(V12)       1    3.5   3.514  1.3896 0.2385666    
+## Residuals 3139 7937.2   2.529                      
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Anova for Nonparametric Effects
+##             Npar Df Npar Chisq    P(Chi)    
+## (Intercept)                                 
+## s(V52)            3     35.821 8.172e-08 ***
+## s(V53)            3     16.126 0.0010686 ** 
+## s(V7)             3     34.830 1.323e-07 ***
+## s(V16)            3     10.364 0.0157144 *  
+## s(V55)            3     19.447 0.0002210 ***
+## s(V21)            3     17.412 0.0005816 ***
+## s(V56)            3     33.965 2.015e-07 ***
+## s(V25)            3     16.877 0.0007494 ***
+## s(V24)            3     12.663 0.0054269 ** 
+## s(V57)            3     10.611 0.0140285 *  
+## s(V5)             3     18.094 0.0004206 ***
+## s(V19)            3      4.020 0.2593695    
+## s(V23)            3      2.774 0.4277357    
+## s(V27)            3      2.238 0.5245242    
+## s(V46)            3     29.041 2.196e-06 ***
+## s(V26)            3      7.664 0.0534936 .  
+## s(V37)            3     18.280 0.0003849 ***
+## s(V8)             3      5.833 0.1200352    
+## s(V50)            3      5.989 0.1121328    
+## s(V12)            3      8.787 0.0322552 *  
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#According to Anova for non-parametric effects, V52, V53, V7, V16, V55, V21, V56, V25, V24, V57, V5,  V46, V37, V12, and possibly V26 have non-linear effect. 
+11.	Apply the model to the test data and get the confusion matrix. Find overall error rates and error rates for individual class (spam and email class).
+V58 <- ifelse(test$V58=="email",1,0)
+test.spamcoded <- data.frame(test[,-58],V58)
+preds=predict(fit.gam,newdata=test.spamcoded)
+conf1=table(preds>0.5, test.spamcoded$V58);conf1 #Confusion Matrix
+##        
+##           0   1
+##   FALSE 516  51
+##   TRUE   30 784
+#Error rate for overall = 0.05865315 (5.86%)
+1-sum(diag(conf1))/sum(conf1)
+## [1] 0.05865315
+#Error rate for "1" (email) = 0.06107784 (6.10%)
+51/(784+51)
+## [1] 0.06107784
+#Error rate for "0" (spam) = 0.05494505 (54.94%)
+30/(516+30)
+## [1] 0.05494505
