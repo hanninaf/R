@@ -1,0 +1,60 @@
+##i.	Farmers needs help forecasting the milk production of their cows. Since machinery, for milking, is quite expensive, 
+##he needs to know if the amount of machines he has are enough for the amount of milk his cows are producing. 
+
+#Reading Data with Seasonality
+milk <- read.csv('/Users/hannina/Documents/Exam 2/monthly-milk-production-pounds-p.csv', header = TRUE, sep=',')
+plot.ts(milk[-169,])
+
+milkTS <- ts(milk, frequency = 12, start = 1962)
+milk_TS <- milkTS[-169, ]
+milkforecasts <- HoltWinters(milk_TS[,2], beta=FALSE, gamma=FALSE,
+                             seasonal = 'additive')
+plot(milkforecasts)
+
+logMilkTS <- log(milkTS[-169, 2])
+milkTSforecast <- HoltWinters(logMilkTS, beta=FALSE, gamma=FALSE,
+                              seasonal = 'additive')
+milkTSforecast$SSE
+## [1] 0.6111841
+#Plotting milk data
+plot(milkTSforecast)
+
+#==============FORECAST of milk data
+require(graphics)
+#decompose(milkTSnoNA)
+noNA <- na.omit(milkTS[,2])
+logMTS <- log(noNA)
+
+## Seasonal Holt-Winters
+m <- HoltWinters(logMTS,
+                 seasonal = 'additive')
+plot(m)
+
+plot(fitted(m))
+
+library(rucm)
+
+noNA <- na.omit(milkTS[,2]) #Removing values wiht NAs (as there is one)
+modelMilk <- ucm(formula = noNA~0, data = noNA, level=TRUE, slope= TRUE, cycle = TRUE, cycle.period = 12)
+modelMilk #Printing method for class ucm
+
+modelMilk <- ucm(formula = noNA~0, data = noNA, level=TRUE, slope= TRUE, cycle = TRUE, cycle.period = 12)
+modelMilk
+
+p <- predict(modelMilk, n.ahead = 144) # Forecasting
+plot(noNA)
+
+plot(p)
+
+ 
+#Plotting fitted values for the existing data and forward 12 periods into the future and plot the original time series as well as the fitted/forecast data 
+
+modelM <- ucm(formula = noNA~0, data = noNA, level = TRUE)
+modelM #Printing method for class ucm
+
+plot(noNA, ylab = "Milk Production: pounds per cow", xlim=c(1962, 1990), ylim=c(500,1200))
+lines(modelMilk$s.level, col = "blue")
+legend("bottomright", legend = c("Observed milk production","S_level", "Predicted"), col = c("black","blue", "red"), lty = 1)
+lines(p, col = 'red')
+
+Note that the echo = FALSE parameter was added to the code chunk to prevent printing of the R code that generated the plot.
