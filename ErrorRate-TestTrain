@@ -1,0 +1,215 @@
+1)	Build R function for K-fold Cross-Validated error for QDA.
+library(ISLR)
+library(MASS)
+data(Default)
+
+cv.qda <-
+  function (data, model=default~income+balance, yname="default", K=10, seed=123) {
+    n <- nrow(data)
+    set.seed(seed)
+    datay=data[,yname] 
+    
+    f <- ceiling(n/K)
+    s <- sample(rep(1:K, f), n)  
+    
+    CV=NULL
+    
+    for (i in 1:K) { #i=1
+      test.index <- seq_len(n)[(s == i)] #test data
+      train.index <- seq_len(n)[(s != i)] #training data
+      
+      qda.fit=qda(model, data=data[train.index,])
+      qda.y <- data[test.index, yname]
+      qda.predy=predict(qda.fit, data[test.index,])$class
+      
+      error= mean(qda.y!=qda.predy)
+      CV=c(CV,error)
+    }
+    #Output
+    list(call = model, K = K, 
+         qda_error_rate = mean(CV), seed = seed)  
+  }
+2)	Compare the errors using 10 fold-CV for data set in #5 for QDA and LDA.
+QDA has a lower error rate than LDA.
+# LDA
+cv.lda <-
+  function (data, model=defailt~., yname="default", K=10, seed=123) {
+    n <- nrow(data)
+    set.seed(seed)
+    datay=data[,yname] #response variable
+    library(MASS)
+    #partition the data into K subsets
+    f <- ceiling(n/K)
+    s <- sample(rep(1:K, f), n)  
+    #generate indices 1:10 and sample n of them  
+    # K fold cross-validated error
+    
+    CV=NULL
+    
+    for (i in 1:K) { #i=1
+      test.index <- seq_len(n)[(s == i)] #test data
+      train.index <- seq_len(n)[(s != i)] #training data
+      
+      #model with training data
+      lda.fit=lda(model, data=data[train.index,])
+      #observed test set y
+      lda.y <- data[test.index, yname]
+      #predicted test set y
+      lda.predy=predict(lda.fit, data[test.index,])$class
+      
+      #observed - predicted on test data
+      error= mean(lda.y!=lda.predy)
+      #error rates 
+      CV=c(CV,error)
+    }
+    #Output
+    list(call = model, K = K, 
+         lda_error_rate = mean(CV), seed = seed)  
+  }
+# QDA Error
+data(Default)
+er_qda=cv.qda(data=Default,model=default~., yname="default", K=10, seed=123)
+er_qda$qda_error_rate
+## [1] 0.0273
+# QDA test error rate is 0.0273.
+# LDA Error
+er_lda=cv.lda(data=Default,model=default~., yname="default", K=10, seed=123)
+er_lda$lda_error_rate
+## [1] 0.0277
+# LDA test error rate is 0.0277
+3a. Build R function for K-fold Cross-Validated error for KNN
+# KNN
+
+cv.knn<- function (dataY, dataX, kn=1, K=10, seed=123) {
+  n <- nrow(dataX)
+  set.seed(seed)
+  library(class)
+  
+  f <- ceiling(n/K)
+  s <- sample(rep(1:K, f), n)  
+  dataX=scale(dataX)
+  CV=NULL;PvsO=NULL
+  
+  for (i in 1:K) { 
+    test.index <- seq_len(n)[(s == i)] #test data
+    train.index <- seq_len(n)[(s != i)] #training data
+   
+    train.X <- dataX[train.index,]
+    test.X <- dataX[test.index,]
+    train.y <- dataY[train.index]
+    test.y <- dataY[test.index]
+    #predicted test set y
+    knn.pred=knn(train.X, test.X, train.y, k=kn) 
+    #observed - predicted on test data 
+    error= mean(knn.pred!=test.y) 
+    #error rates 
+    CV=c(CV,mean(error))
+    predvsobs=data.frame(knn.pred,test.y)
+    PvsO=rbind(PvsO,predvsobs)
+  } 
+  
+  #Output
+  list(k = K,
+       knn_error_rate = mean(CV), confusion=table(PvsO[,1],PvsO[,2]), seed=seed)
+}
+3b. Find the best k for knn using 10 fold-CV for data set in # 5 #Try k for at least 1:half of sample size. (Running for i = 100).
+Best k is = 18
+cv.error=NULL
+for (i in 1:100) {
+  cv.error[i] <- cv.knn(dataY=Default$default, dataX=Default[,-(1:2)], kn=i, 
+                        K=10, seed=123)$knn_error_rate
+ 
+}
+k=which(cv.error==min(cv.error))
+print(k)
+## [1] 18
+# Best k = 18
+4.	Compare the errors for logistic regression, best knn, lda and qda for data in #5.
+The lowest error was produced by logistic regression with error rate of 0.02136125. Best knn (18) had an error of 0.0263, LDA had an error of 0.0277 and QDA had an error of 0.0273.
+# Logistic Regression error
+
+set.seed(123)
+library(boot)
+glm.fit=glm(default~.,data=Default, family = "binomial")
+cv.error= cv.glm(Default, glm.fit,K=10)$delta[1]
+cv.error
+## [1] 0.02136125
+# Logistic Regression error is 0.02136125
+# KNN
+er_knn=cv.knn(dataY=Default$default, dataX=Default[,-(1:2)], kn=18, K=10, seed=123)
+# Error
+
+er_knn$knn_error_rate
+## [1] 0.0263
+# KNN - 0.0263
+
+er_lda$lda_error_rate
+## [1] 0.0277
+# LDA - 0.0277
+
+er_qda$qda_error_rate
+## [1] 0.0273
+# QDA- 0.0273
+5.	6 p.199
+#a) The esstimated standard errors for the coefficients associated with income and balance is 4.985e-06 (income) and 2.274e-04 (balance).
+
+library(ISLR)
+summary(Default)
+##  default    student       balance           income     
+##  No :9667   No :7056   Min.   :   0.0   Min.   :  772  
+##  Yes: 333   Yes:2944   1st Qu.: 481.7   1st Qu.:21340  
+##                        Median : 823.6   Median :34553  
+##                        Mean   : 835.4   Mean   :33517  
+##                        3rd Qu.:1166.3   3rd Qu.:43808  
+##                        Max.   :2654.3   Max.   :73554
+attach(Default)
+
+set.seed(1)
+glm.fit = glm(default ~ income + balance, data = Default, family = binomial)
+summary(glm.fit)
+## 
+## Call:
+## glm(formula = default ~ income + balance, family = binomial, 
+##     data = Default)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -2.4725  -0.1444  -0.0574  -0.0211   3.7245  
+## 
+## Coefficients:
+##               Estimate Std. Error z value Pr(>|z|)    
+## (Intercept) -1.154e+01  4.348e-01 -26.545  < 2e-16 ***
+## income       2.081e-05  4.985e-06   4.174 2.99e-05 ***
+## balance      5.647e-03  2.274e-04  24.836  < 2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 2920.6  on 9999  degrees of freedom
+## Residual deviance: 1579.0  on 9997  degrees of freedom
+## AIC: 1585
+## 
+## Number of Fisher Scoring iterations: 8
+#b) Boot Function
+
+boot.fn = function(data, index) return(coef(glm(default ~ income + balance, 
+    data = data, family = binomial, subset = index)))
+#c) The standard errors of the logistic regression coefficients for income and balance is 4.542214e-06 (income) and 2.282819e-04 (balance)
+
+library(boot)
+boot(Default, boot.fn, 50)
+## 
+## ORDINARY NONPARAMETRIC BOOTSTRAP
+## 
+## 
+## Call:
+## boot(data = Default, statistic = boot.fn, R = 50)
+## 
+## 
+## Bootstrap Statistics :
+##          original        bias     std. error
+## t1* -1.154047e+01  1.181200e-01 4.202402e-01
+## t2*  2.080898e-05 -5.466926e-08 4.542214e-06
+## t3*  5.647103e-03 -6.974834e-05 2.282819e-04
+D)	The standard errors of the coefficients, using the boot function, does not have much of a difference from the standard errors of the coefficient obtained by using the glm().
