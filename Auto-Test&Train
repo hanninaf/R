@@ -1,0 +1,117 @@
+library(ISLR)
+library(MASS)
+library(class)
+Auto = read.csv("Auto.csv", na.strings="?", header=T)
+Auto = subset(Auto, !(is.na(Auto$horsepower)))
+### 1 = "high" and 0 = "low"
+mpg01 = ifelse(Auto$mpg > median(Auto$mpg),1,0) 
+Auto = data.frame(Auto, mpg01)
+summary(Auto)
+
+pairs(Auto)
+
+par(mfrow=c(2,4))
+boxplot(cylinders ~ mpg01, data = Auto, main = "Cylinders vs mpg01")
+boxplot(displacement ~ mpg01, data = Auto, main = "Displacement vs mpg01")
+boxplot(horsepower ~ mpg01, data = Auto, main = "Horsepower vs mpg01")
+boxplot(weight ~ mpg01, data = Auto, main = "Weight vs mpg01")
+boxplot(acceleration ~ mpg01, data = Auto, main = "Acceleration vs mpg01")
+boxplot(year ~ mpg01, data = Auto, main = "Year vs mpg01")
+boxplot(origin ~ mpg01, data = Auto, main = "Origin vs mpg01")
+
+### According to the plots, there seems to be some association between mpg01 and cylinders, mpg01 and weight, and mpg01 and displacement. According to the matrix, there is also some relationship between the predictor variables. 
+
+### (c) - Splitting data
+train = sample(1:397,397*.7,rep=FALSE)
+training_data = Auto[train, ]
+testing_data = Auto[-train, ]
+testing_mpg01 = mpg01[-train]
+### (d) - Logistic Regression
+logistic.model = glm(mpg01 ~ cylinders + weight + displacement + horsepower, data = Auto, family = binomial, subset = train)
+summary(logistic.model)
+
+# Predict and Test Error
+probs = predict(logistic.model, testing_data, type = "response")
+logistic_pred = rep(0, length(probs))
+logistic_pred[probs > 0.5] = 1
+table(logistic_pred, testing_mpg01)
+##              testing_mpg01
+## logistic_pred  0  1
+##             0 57  9
+##             1  3 50
+# Test Error using Logistic Regression =
+mean(logistic_pred != testing_mpg01)
+## [1] 0.1008403
+### KNN
+# (e)
+# Split data
+library(class)
+data = scale(Auto[,-c(1,8,9)])
+set.seed(123)
+train <- sample(1:392,392*.7,rep=FALSE)
+test <- -train
+training_data = data[train, c("cylinders","displacement", "horsepower", "weight")]
+testing_data = data[test, c("cylinders", "displacement", "horsepower", "weight")]
+training_y = Auto$mpg01[train]
+testing_y = Auto$mpg01[test]
+# Table
+set.seed(1)
+knn_pred = knn(training_data, testing_data, training_y, k = 3)
+table(knn_pred, testing_y)
+##         testing_y
+## knn_pred  0  1
+##        0 57  2
+##        1  7 52
+# Test Error using KNN
+mean(knn_pred != testing_y)
+## [1] 0.07627119
+# Choosing best K
+knn_pred_y = NULL
+error_rate = NULL
+for(i in 1:274){
+set.seed(1)
+knn_pred_y = knn(training_data,testing_data,training_y,k=i)
+error_rate[i] = mean(testing_y != knn_pred_y)
+}
+
+# minimum error rate
+min_error_rate = min(error_rate)
+print(min_error_rate)
+## [1] 0.07627119
+# Best Test Error
+K = which(error_rate == min_error_rate)
+print(K)
+## [1] 3 6
+# Best K = 3 and/or 6
+### LDA
+# (f)
+train = sample(1:397,397*.7,rep=FALSE)
+training_dataLDA = Auto[train, ]
+testing_dataLDA = Auto[-train, ]
+testing_mpg01 = mpg01[-train]
+
+lda_model <- lda(mpg01 ~ cylinders + weight + displacement + horsepower, data = Auto, subset = train)
+lda_model
+
+# Predict
+lda_pred <- predict(lda_model, testing_dataLDA)
+table(lda_pred$class, testing_mpg01)
+##    testing_mpg01
+##      0  1
+##   0 53  6
+##   1  6 55
+# Test Error using LDA 
+mean(lda_pred$class != testing_mpg01)
+## [1] 0.1
+### QDA
+# (g)
+qda_model = qda(mpg01 ~ cylinders + weight + displacement + horsepower, data = Auto, subset = train)
+qda_model
+
+# Predict
+qda_pred = predict(qda_model, testing_dataLDA)
+table(qda_pred$class, testing_mpg01)
+
+# Test Error using Logistic Regression 
+mean(qda_pred$class != testing_mpg01)
+## [1] 0.1083333
