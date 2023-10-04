@@ -279,3 +279,112 @@ conf1=table(preds>0.5, test.spamcoded$V58);conf1 #Confusion Matrix
 #Error rate for "0" (spam) = 0.05494505 (54.94%)
 30/(516+30)
 ## [1] 0.05494505
+SVM 
+12. Build a svm model to classify V58 using V1 through V57 on train data. Use “radial” kernel function and find the best gamma and cost first. What are the best gamma and cost? What’s error rate for the optimal gamma and cost?
+library(e1071)
+set.seed(123)
+tune.out=tune(svm, V58~. , data=train.spamcoded, kernel="radial", 
+              ranges=list(cost=c(0.1, 1, 10, 20, 30, 40, 100), 
+                          gamma=c(0.01,0.05,0.1,5)))
+summary(tune.out)
+## 
+## Parameter tuning of 'svm':
+## 
+## - sampling method: 10-fold cross validation 
+## 
+## - best parameters:
+##  cost gamma
+##    10  0.01
+## 
+## - best performance: 0.06234832 
+## 
+## - Detailed performance results:
+##     cost gamma      error  dispersion
+## 1    0.1  0.01 0.08733113 0.009444026
+## 2    1.0  0.01 0.07028057 0.007893650
+## 3   10.0  0.01 0.06234832 0.009186426
+## 4   20.0  0.01 0.06302791 0.010380061
+## 5   30.0  0.01 0.06488497 0.011254647
+## 6   40.0  0.01 0.06681549 0.012110643
+## 7  100.0  0.01 0.07872985 0.015385656
+## 8    0.1  0.05 0.09651904 0.012506086
+## 9    1.0  0.05 0.06739048 0.009716054
+## 10  10.0  0.05 0.06865683 0.010207640
+## 11  20.0  0.05 0.07180088 0.010721203
+## 12  30.0  0.05 0.07452202 0.011260984
+## 13  40.0  0.05 0.07649428 0.011569185
+## 14 100.0  0.05 0.08376529 0.012247673
+## 15   0.1  0.10 0.12854507 0.012912180
+## 16   1.0  0.10 0.07822990 0.011081632
+## 17  10.0  0.10 0.07994394 0.011394256
+## 18  20.0  0.10 0.08190357 0.011342761
+## 19  30.0  0.10 0.08364150 0.011414581
+## 20  40.0  0.10 0.08511257 0.011385585
+## 21 100.0  0.10 0.08928310 0.012118711
+## 22   0.1  5.00 0.30557490 0.021299888
+## 23   1.0  5.00 0.17290465 0.009569435
+## 24  10.0  5.00 0.17225069 0.008962241
+## 25  20.0  5.00 0.17231234 0.008854232
+## 26  30.0  5.00 0.17231553 0.008787915
+## 27  40.0  5.00 0.17237579 0.008771137
+## 28 100.0  5.00 0.17278405 0.008601717
+#According to the model, best cost = 10 and gamma = 0.01. Error rate for the optimal gamma and cost is 0.06234832 (6.23%).
+13.	Apply the model to the test data and get the confusion matrix and error rates.
+bestmod=tune.out$best.model
+summary(bestmod)
+## 
+## Call:
+## best.tune(method = svm, train.x = V58 ~ ., data = train.spamcoded, 
+##     ranges = list(cost = c(0.1, 1, 10, 20, 30, 40, 100), gamma = c(0.01, 
+##         0.05, 0.1, 5)), kernel = "radial")
+## 
+## 
+## Parameters:
+##    SVM-Type:  eps-regression 
+##  SVM-Kernel:  radial 
+##        cost:  10 
+##       gamma:  0.01 
+##     epsilon:  0.1 
+## 
+## 
+## Number of Support Vectors:  1994
+pred=predict(bestmod,newdata=test.spamcoded)
+#Confusion Matrix
+table(obs=test.spamcoded$V58, pred>0.5)
+##    
+## obs FALSE TRUE
+##   0   490   56
+##   1    38  797
+#Error rate = 0.0680662 (6.80%)
+(56+38)/(56+38+490+797)
+## [1] 0.06806662
+14.	Compare error rates of the best tree, bagging, randomForest, gam, and svm for the predicted values on test data above. Which model do you prefer?
+
+By comparing the error rates of the listed models, I prefer randomForest as it gave the lowest error rate (4.41%) on the test set.
+CLUSTERING 
+15. For the test data without V58, find the optimal number of clusters using average silhouette length test. (Use manhattan distance and method = “complete” for scaled data)
+library(NbClust)
+set.seed(123)
+x <- scale(test[,-58])
+res<-NbClust(x, diss=NULL, distance = "manhattan", min.nc=2, max.nc=20, 
+             method = "complete", index =  "silhouette") 
+res$Best.nc
+## Number_clusters     Value_Index 
+##          2.0000          0.7921
+#Optimal number of cluster = 2
+16.	Using the above result, find kmeans cluster with the optimal number of clusters above.
+set.seed(1)
+km.out=kmeans(x, centers = 2, nstart=20)
+km.out$tot.withinss #72980.69
+## [1] 72980.69
+km.out1=kmeans(x, centers = 2, nstart=1)
+km.out1$tot.withinss #74998.62
+## [1] 74998.62
+#K-means cluster k =2 has a within cluster sum of square of 74998.62
+17.	Using table function, explain how the clusters corresponds to the V58 (spam or email). Do you think clustering can be used in classifying V58?
+table(test$V58,km.out$cluster)
+##        
+##           1   2
+##   email   5 830
+##   spam    0 546
+#According to the matrix, the first cluster does not have much observations and the distribution does not look good. On the first cluster, 5 observations are email and 0 spam, while on the 2nd cluster, 830 observations are email and 546 spam. I don't think clustering can be used in classifying V58. The clusters could have been separated by other characteristics, such as words and symbols or letter and numbers.
